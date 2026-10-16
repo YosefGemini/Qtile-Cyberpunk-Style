@@ -1,0 +1,12 @@
+#!/bin/bash
+# Launch qtile from the isolated virtualenv (falls back to the system one).
+#
+# The isolated venv pins a working xcffib version; see README.md for details.
+
+VENV="$HOME/.local/share/qtile/venv"
+
+if [ -x "$VENV/bin/qtile" ]; then
+  exec "$VENV/bin/qtile" "$@"
+fi
+
+exec qtile "$@"

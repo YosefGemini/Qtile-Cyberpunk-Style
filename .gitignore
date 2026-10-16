@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments (created by install.sh outside the repo, but just in case)
+venv/
+.venv/
+env/
+
+# Editor / OS cruft
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# Local backups
+*-backup-*/
+config.py.save
+config.py.save.*
+*.bak
+*.orig
+*.rej
+
+# Qtile runtime artifacts
+*.log
