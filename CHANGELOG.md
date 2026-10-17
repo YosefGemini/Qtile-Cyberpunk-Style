@@ -15,10 +15,10 @@ handling and an installer.
 
 ### Added
 
-- **Isolated virtualenv** (`~/.local/share/qtile/venv`) created by
-  `install.sh`, pinning `xcffib==1.6.2`, `qtile==0.37.1`,
-  `qtile-extras==0.37.1` and `dbus-fast`. Works around the broken
-  `python-xcffib 1.7.0-1` package that made `import libqtile` fail.
+- **Per-user `xcffib==1.6.2` + `dbus-fast` override** installed into
+  `~/.local/lib/python3.14/site-packages` by `install.sh`. Works around the
+  broken `python-xcffib 1.7.0-1` package that made `import libqtile` fail,
+  without touching system packages or needing sudo.
 - `modules/` package: `settings`, `theme`, `functions`, `keys`, `groups`,
   `layouts`, `widgets`, `screens`, `hooks`.
 - `modules/screens.py` with `generate_screens()`: one bar per real output,
@@ -27,9 +27,8 @@ handling and an installer.
 - `arrange_monitors()`: X11 monitor layout with `xrandr` at startup
   (laptop primary, `DP-*` left, HDMI right, best mode per output).
 - Backend-aware system tray: `Systray` on X11, `StatusNotifier` on Wayland.
-- `install.sh` (Arch-focused) and user session entries for X11 and Wayland.
+- `install.sh` (Arch-focused).
 - `README.md` and this `CHANGELOG.md` documenting every solved problem.
-- `scripts/qtile-venv` launcher wrapper.
 
 ### Changed
 
@@ -46,6 +45,10 @@ handling and an installer.
 - qtile not starting on X11 **and** Wayland because
   `cairocffi`/`xcffib` `ffi.include()` raised `TypeError` (xcffib 1.7.0
   regression).
+- Sessions launched from a display manager failing because the fix lived in a
+  virtualenv that SDDM cannot see (it only scans system session directories)
+  while the built-in "Qtile" entry kept calling the broken `/usr/bin/qtile`.
+  The per-user site-packages override now fixes the system `qtile` itself.
 - Bar attached to the wrong monitor and the Wayland "false screen" that
   produced a blank session.
 - `ConfigError: Only one Systray can be used.` when screens were reconfigured.
@@ -58,5 +61,5 @@ handling and an installer.
 - Duplicate `mouse` definition (lost `Button2` bring-to-front) and duplicated
   `Tab` key bindings.
 
-[Unreleased]: https://example.com/compare/v0.1.0...HEAD
-[0.1.0]: https://example.com/releases/tag/v0.1.0
+[Unreleased]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/releases/tag/v0.1.0

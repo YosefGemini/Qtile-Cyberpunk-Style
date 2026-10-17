@@ -33,11 +33,12 @@ if [ "$SESSION" = "x11" ]; then
   fi
 
   if command -v feh >/dev/null; then
-    feh --bg-fill /usr/share/wallpapers/garuda-wallpapers/CyberPunkER.webp
+    feh --bg-fill /usr/share/wallpapers/garuda-wallpapers/cyberpunk-night.jpg
   fi
 else
   # Wayland: set the wallpaper with a Wayland-native tool if present.
   if command -v swaybg >/dev/null; then
-    run swaybg -i /usr/share/wallpapers/garuda-wallpapers/CyberPunkER.webp -m fill
+    pkill swaybg
+    swaybg -i /usr/share/wallpapers/garuda-wallpapers/cyberpunk-night.jpg -m fill &
   fi
 fi

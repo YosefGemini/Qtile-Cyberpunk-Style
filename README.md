@@ -1,14 +1,14 @@
 # YosefGemini Qtile Configuration
 
 A modular [qtile](http://qtile.org) configuration with automatic multi-monitor
-handling that works on **both X11 and Wayland**, plus an installer that creates
-an isolated Python environment so it keeps working on Arch Linux.
+handling that works on **both X11 and Wayland**, plus an installer that works
+around a broken Arch package so it keeps starting on Arch Linux.
 
 ```
 config.py          # thin entry point
 modules/           # settings, theme, functions, keys, groups,
                    # layouts, widgets, screens, hooks
-scripts/           # autostart.sh, picom-toggle.sh, qtile-venv
+scripts/           # autostart.sh, picom-toggle.sh, dmenu.sh
 icons/             # bar icons
 install.sh         # installer (Arch Linux)
 LICENSE            # MIT License
@@ -23,13 +23,14 @@ from the original single-file configuration.
 ## Quick start (Arch Linux)
 
 ```bash
-git clone <your-repo-url> ~/.config/qtile
+git clone https://github.com/YosefGemini/Qtile-Cyberpunk-Style.git ~/.config/qtile
 cd ~/.config/qtile
 ./install.sh
 ```
 
-Then log out and pick **Qtile (custom)** (X11) or **Qtile (custom, Wayland)**
-in your display manager.
+Then log out and pick **Qtile** (X11) or **Qtile (Wayland)** in your display
+manager. The installer fixes the system Qtile so the standard session entries
+work - no custom session file is needed.
 
 After the first install, apply changes by editing the files under
 `~/.config/qtile/modules/` and pressing `Super+Ctrl+R` (qtile reload) or
@@ -37,18 +38,19 @@ After the first install, apply changes by editing the files under
 
 ### Storage required
 
+The installer only installs two small wheels into your **per-user**
+site-packages (`~/.local/lib/python3.14/site-packages`):
+
 | Item | Size |
 |------|------|
-| `~/.local/share/qtile/venv` (isolated environment, reuses system libs) | ~28 MB |
+| `xcffib` 1.6.2 override | ~2 MB |
+| `dbus-fast` (Wayland tray) | ~2 MB |
 | `~/.config/qtile` (config + icons) | <1 MB |
-| pip build cache (first install only) | ~10 MB |
 
-Measured: `du -sh ~/.local/share/qtile/venv` → **28 MB**.
-
-The environment uses `--system-site-packages`, so it **reuses** the system
-`pywayland`, `pywlroots`, `cairocffi`, etc., and only overrides the broken
-`xcffib`. A fully isolated environment (building `pywlroots` from source)
-would need ~400–600 MB plus build tooling, which is avoided on purpose.
+No virtualenv and no system packages are modified, so nothing is added to
+`~/.local/share/qtile`. (An earlier design used an isolated venv of ~28 MB, but
+it was dropped because display managers such as SDDM only read system session
+directories and would never see it - see Problem 1.)
 
 ---
 
@@ -71,16 +73,30 @@ failure happens inside `libqtile` itself, so **no backend can start**. Upstream
 xcffib reverted the change in 1.7.1, but Arch shipped the broken 1.7.0 (the
 package was flagged out-of-date the same day).
 
-**Solution:** `install.sh` creates `~/.local/share/qtile/venv` and pins
-`xcffib==1.6.2` (the last known-good release) inside it. The session entries
-launch qtile through `scripts/qtile-venv`, which uses that environment. The
-system package is left untouched.
-
-**When Arch ships a fixed xcffib (>= 1.7.1):** remove the pin and the venv:
+**Solution:** `install.sh` installs `xcffib==1.6.2` (the last known-good
+release) into your **per-user** site-packages
+(`~/.local/lib/python3.14/site-packages`). Python's user site-packages come
+*before* the system site-packages on `sys.path`, so the working 1.6.2 shadows
+the broken system 1.7.0 for every Qtile process - the system `qtile` command
+and all built-in session entries now start, and the system packages stay
+untouched (no sudo, nothing to upgrade).
 
 ```bash
-rm -rf ~/.local/share/qtile/venv
-# then edit install.sh and drop the xcffib pin line
+python -m pip install --user --break-system-packages --no-deps --force-reinstall xcffib==1.6.2
+python -m pip install --user --break-system-packages dbus-fast
+```
+
+> Why not a virtualenv? A venv is more isolated, but display managers such as
+> SDDM only scan `/usr/local/share/{xsessions,wayland-sessions}` and
+> `/usr/share/{xsessions,wayland-sessions}` - **not** `~/.local/share` - so the
+> session would be invisible and you would keep landing on the broken built-in
+> session. The per-user override fixes the built-in sessions directly.
+
+**When Arch ships a fixed xcffib (>= 1.7.1):** remove the override:
+
+```bash
+rm -rf ~/.local/lib/python3.14/site-packages/xcffib \
+       ~/.local/lib/python3.14/site-packages/xcffib-*.dist-info
 ```
 
 ### 2. Multi-monitor management (order forgotten, wrong/"false" screen)
@@ -141,7 +157,7 @@ which conflicts.
 - **X11** → `qtile_extras.widget.Systray` (identical to before);
 - **Wayland** → `qtile_extras.widget.StatusNotifier` (the DBus
   StatusNotifierItem protocol), which needs `dbus-fast` (installed into the
-  venv by `install.sh`).
+  per-user site-packages by `install.sh`).
 
 The tray is only added to the main screen (see Problem 2).
 
@@ -219,19 +235,22 @@ workspace (which produced "Key spec duplicated" warnings).
 
 ## Requirements
 
-- Arch Linux (installer), qtile 0.37.x.
-- The installer pulls: `python`, `python-pip`, `python-cffi`,
+- Arch Linux (installer), qtile 0.37.x and `qtile-extras` (AUR
+  `qtile-extras-git`).
+- The installer also pulls: `python`, `python-pip`, `python-cffi`,
   `python-cairocffi`, `python-pywayland`, `python-pywlroots`, `python-pyxdg`,
   `ttf-nerd-fonts-symbols`.
 - Optional wallpapers: `/usr/share/wallpapers/garuda-wallpapers/`.
 
 ## Manual install (non-Arch)
 
-1. Install qtile 0.37.x with `pywayland`, `pywlroots`, `cairocffi`, `dbus-fast`
-   and **`xcffib == 1.6.2`**.
-2. Copy this directory to `~/.config/qtile`.
-3. Point your session at `~/.config/qtile/scripts/qtile-venv start -b x11` or
-   `... -b wayland`.
+1. Install qtile 0.37.x with `pywayland`, `pywlroots`, `cairocffi` and
+   `qtile-extras`.
+2. Add a working **`xcffib == 1.6.2`** and `dbus-fast` to your Python user
+   site-packages (`pip install --user xcffib==1.6.2 dbus-fast`) if your
+   distribution ships a broken xcffib.
+3. Copy this directory to `~/.config/qtile`.
+4. Log in with the standard **Qtile** / **Qtile (Wayland)** session.
 
 ## License
 

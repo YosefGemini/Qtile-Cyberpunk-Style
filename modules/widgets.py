@@ -16,8 +16,8 @@ from modules.theme import colors
 
 def _tray_widget():
     if backend_is_wayland():
-        return widget.StatusNotifier(icon_size=20, padding=4)
-    return widget.Systray(icon_size=20, padding=4)
+        return widget.StatusNotifier(icon_size=14, padding=4)
+    return widget.Systray(icon_size=14, padding=4)
 
 
 def build_widgets(show_tray=True):
@@ -30,6 +30,7 @@ def build_widgets(show_tray=True):
         widget.Image(
             filename="~/.config/qtile/icons/garuda-yellow.svg",
             iconsize=9,
+            width=24,  # <-- Añade un ancho fijo para delimitar el espacio
             background=colors[1],
             mouse_callbacks={"Button1": lazy.spawn("jgmenu_run")},
             decorations=[PowerLineDecoration(path="forward_slash")],
@@ -75,7 +76,7 @@ def build_widgets(show_tray=True):
             fontsize=12,
             foreground=colors[4],
             padding=5,
-            format="\U0001f5d6 {state}-{name}",
+            format="{name}",
             parse_text=only_app_name,
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
@@ -123,7 +124,7 @@ def build_widgets(show_tray=True):
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
         widget.DF(
-            format="\u26c1 {uf}{m} {r:.0f}%",
+            format="\u26c1 {uf}{m:.1f} {r:.0f}%",  # Limitamos los decimales de {m} a 1 (o usa :.0f si prefieres enteros)
             visible_on_warn=False,
             foreground=colors[1],
             background=colors[4],
@@ -162,10 +163,17 @@ def build_widgets(show_tray=True):
             background=colors[15],
             foreground=colors[15],
         ),
-        widget.BatteryIcon(
-            padding=4,
-            scale=1,
-        ),
+        # widget.BatteryIcon(
+        #     padding=4,
+        #     scale=1,
+        # ),
+        widget.UPowerWidget(
+            battery="BAT0",
+            show_short_text=False,
+            update_interval=5,
+            low_percentage=0.15,
+            low_foreground=colors[2],   
+        )
     ]
 
     if show_tray:

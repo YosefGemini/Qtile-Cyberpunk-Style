@@ -3,30 +3,23 @@
 # Installer for the modular qtile configuration.
 #
 # Arch Linux focused. It:
-#   1. backs up any existing ~/.config/qtile
-#   2. installs the configuration into ~/.config/qtile
-#   3. creates an isolated virtualenv with a *working* pinned xcffib
-#      (Arch's python-xcffib 1.7.0 is broken with cairocffi - see README.md)
-#   4. creates X11 and Wayland session entries that launch the venv
-#   5. validates the configuration with `qtile check`
+#   1. installs the required system packages
+#   2. backs up any existing ~/.config/qtile and installs this configuration
+#   3. fixes the broken Arch python-xcffib 1.7.0 by placing a working
+#      xcffib==1.6.2 (plus dbus-fast) in the per-user site-packages.
+#      This needs no sudo and leaves the system packages untouched. See
+#      README.md - "Problem 1".
+#   4. validates the configuration with `qtile check`
 #
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONFIG_DIR="$CONFIG_HOME/qtile"
-VENV_DIR="$DATA_HOME/qtile/venv"
-XSESSION_DIR="$DATA_HOME/xsessions"
-WAYLAND_SESSION_DIR="$DATA_HOME/wayland-sessions"
 
-# Pinned versions (see README.md - "Problem 1").
+# Last known-good xcffib before Arch's broken 1.7.0 (see README).
 XCFFIB_VERSION="1.6.2"
-QTILE_VERSION="0.37.1"
-QTILE_EXTRAS_VERSION="0.37.1"
 
-# System packages the config expects. Installed with the detected AUR helper
-# or pacman if missing.
 SYSTEM_PKGS=(
   python
   python-pip
@@ -35,7 +28,13 @@ SYSTEM_PKGS=(
   python-pywayland
   python-pywlroots
   python-pyxdg
+  qtile
   ttf-nerd-fonts-symbols
+)
+
+# qtile_extras is not in the official repositories.
+AUR_PKGS=(
+  qtile-extras-git
 )
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -44,7 +43,13 @@ die()  { printf '\033[1;31m[x]\033[0m %s\n' "$*" >&2; exit 1; }
 
 require_arch() {
   command -v pacman >/dev/null 2>&1 || \
-    die "This installer targets Arch Linux (pacman not found). Install manually - see README.md."
+    die "This installer targets Arch Linux (pacman not found). See README.md for manual steps."
+}
+
+aur_helper() {
+  if command -v paru >/dev/null 2>&1; then echo paru
+  elif command -v yay >/dev/null 2>&1; then echo yay
+  else echo ""; fi
 }
 
 install_system_pkgs() {
@@ -53,15 +58,25 @@ install_system_pkgs() {
     pacman -Qq "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
   done
   [ ${#missing[@]} -eq 0 ] && return 0
+  info "Installing system packages: ${missing[*]}"
+  sudo pacman -S --needed --noconfirm "${missing[@]}"
+}
 
-  warn "Missing system packages: ${missing[*]}"
-  if command -v paru >/dev/null 2>&1; then
-    paru -S --needed --noconfirm "${missing[@]}"
-  elif command -v yay >/dev/null 2>&1; then
-    yay -S --needed --noconfirm "${missing[@]}"
-  else
-    sudo pacman -S --needed --noconfirm "${missing[@]}"
+install_aur_pkgs() {
+  local helper missing=()
+  helper="$(aur_helper)"
+  for pkg in "${AUR_PKGS[@]}"; do
+    pacman -Qq "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+  done
+  [ ${#missing[@]} -eq 0 ] && return 0
+
+  if [ -z "$helper" ]; then
+    warn "Missing AUR packages: ${missing[*]}"
+    warn "Install an AUR helper (paru/yay) or build ${missing[*]} manually."
+    return 0
   fi
+  info "Installing AUR packages with $helper: ${missing[*]}"
+  "$helper" -S --needed --noconfirm "${missing[@]}"
 }
 
 backup_config() {
@@ -86,64 +101,36 @@ install_config() {
       [ -e "$REPO_DIR/$f" ] && cp -a "$REPO_DIR/$f" "$CONFIG_DIR/"
     done
   fi
-  chmod +x "$CONFIG_DIR/scripts/"*.sh "$CONFIG_DIR/scripts/qtile-venv" 2>/dev/null || true
+  chmod +x "$CONFIG_DIR/scripts/"*.sh 2>/dev/null || true
 }
 
-create_venv() {
-  info "Creating isolated virtualenv at $VENV_DIR"
-  mkdir -p "$DATA_HOME/qtile"
-  [ -d "$VENV_DIR" ] || python -m venv --system-site-packages "$VENV_DIR"
-
-  "$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip
-  info "Pinning xcffib==$XCFFIB_VERSION (workaround for the 1.7.0 regression)"
-  "$VENV_DIR/bin/python" -m pip install --quiet --force-reinstall --no-deps "xcffib==$XCFFIB_VERSION"
-  info "Installing qtile==$QTILE_VERSION and qtile-extras==$QTILE_EXTRAS_VERSION"
-  "$VENV_DIR/bin/python" -m pip install --quiet --force-reinstall --no-deps \
-    "qtile==$QTILE_VERSION" "qtile-extras==$QTILE_EXTRAS_VERSION"
-  "$VENV_DIR/bin/python" -m pip install --quiet "dbus-fast"
-}
-
-create_sessions() {
-  info "Creating user session entries"
-  mkdir -p "$XSESSION_DIR" "$WAYLAND_SESSION_DIR"
-
-  cat > "$XSESSION_DIR/qtile-custom.desktop" <<EOF
-[Desktop Entry]
-Name=Qtile (custom)
-Comment=Qtile X11 session (isolated venv)
-Exec=$CONFIG_DIR/scripts/qtile-venv start -b x11
-Type=Application
-DesktopNames=qtile
-Keywords=wm;tiling
-EOF
-
-  cat > "$WAYLAND_SESSION_DIR/qtile-custom.desktop" <<EOF
-[Desktop Entry]
-Name=Qtile (custom, Wayland)
-Comment=Qtile Wayland session (isolated venv)
-Exec=$CONFIG_DIR/scripts/qtile-venv start -b wayland
-Type=Application
-DesktopNames=qtile
-Keywords=wm;tiling
-EOF
+fix_xcffib() {
+  local user_site
+  user_site="$(python -c 'import site; print(site.USER_SITE)')"
+  info "Installing xcffib==$XCFFIB_VERSION into $user_site (workaround for the 1.7.0 regression)"
+  mkdir -p "$user_site"
+  python -m pip install --user --break-system-packages --no-deps --force-reinstall \
+    "xcffib==$XCFFIB_VERSION"
+  info "Installing dbus-fast (required by the Wayland system tray)"
+  python -m pip install --user --break-system-packages "dbus-fast"
 }
 
 validate() {
   info "Validating configuration"
-  ( cd "$CONFIG_DIR" && "$VENV_DIR/bin/qtile" check ) || \
-    warn "qtile check reported issues (see above)"
+  python -c "import cairocffi" >/dev/null 2>&1 || \
+    die "cairocffi still broken - xcffib override did not take effect."
+  ( cd "$CONFIG_DIR" && qtile check ) || warn "qtile check reported issues (see above)"
 }
 
 main() {
   require_arch
   install_system_pkgs
+  install_aur_pkgs
   backup_config
   install_config
-  create_venv
-  create_sessions
+  fix_xcffib
   validate
-  info "Done. Log out and choose 'Qtile (custom)' at your display manager."
-  info "Storage used: about 28 MB for $VENV_DIR + ~1 MB for the config"
+  info "Done. Log out and pick 'Qtile' (X11) or 'Qtile (Wayland)' in your display manager."
 }
 
 main "$@"
