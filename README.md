@@ -20,6 +20,16 @@ from the original single-file configuration.
 
 ---
 
+
+## Screenshots 🖥️
+
+![Qtile Screenshots](/docs/images/qtileconfig1.png)
+
+![Qtile Screenshots](/docs/images/qtileconfig2.png)
+
+![Qtile Screenshots](/docs/images/qtileconfig3.png)
+
+
 ## Quick start (Arch Linux)
 
 ```bash
