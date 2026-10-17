@@ -1,6 +1,7 @@
 """Global settings, paths and backend/session detection."""
 
 import os
+import shutil
 
 mod = "mod4"
 mod1 = "alt"
@@ -9,9 +10,20 @@ mod2 = "control"
 home = os.path.expanduser("~")
 config_dir = os.path.join(home, ".config", "qtile")
 
+# Persisted monitor layout (see modules/monitor_layout.py).
+MONITOR_LAYOUT_FILE = os.path.join(config_dir, "monitor_layout.txt")
+
 # Laptop panel port prefixes, used to pick the "main" screen. Works for both
 # X11 (RandR names) and Wayland (wlroots names).
 MAIN_OUTPUT_PREFIXES = ("eDP", "LVDS", "DSI", "panel")
+
+
+def has_xrandr() -> bool:
+    return shutil.which("xrandr") is not None
+
+
+def has_wlr_randr() -> bool:
+    return shutil.which("wlr-randr") is not None
 
 
 def backend_is_wayland() -> bool:

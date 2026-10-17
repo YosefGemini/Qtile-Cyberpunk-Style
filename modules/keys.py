@@ -75,6 +75,7 @@ keys = [
     Key([], "Print", lazy.spawn("flameshot full -p " + home + "/Pictures")),
     Key([mod2], "Print", lazy.spawn("flameshot full -p " + home + "/Pictures")),
     Key([mod, "shift"], "s", lazy.spawn("flameshot gui")),
+    # Key([mod, "shift"], "s", lazy.spawn("maim -s | xclip -selection clipboard -t image/png")),
 
     # TOGGLE FLOATING LAYOUT
     Key([mod, "shift"], "space", lazy.window.toggle_floating()),
@@ -93,6 +94,9 @@ keys = [
     Key([], "XF86AudioNext", lazy.spawn("playerctl next")),
     Key([], "XF86AudioPrev", lazy.spawn("playerctl previous")),
     Key([], "XF86AudioStop", lazy.spawn("playerctl stop")),
+
+    # MONITOR LAYOUT EDITOR
+    Key([mod, "control"], "m", lazy.widget["monitorlayout"].show_editor()),
 
     # SHUTDOWN QTILE
     Key([mod, "control"], "q", lazy.shutdown(), desc="Shutdown Qtile"),

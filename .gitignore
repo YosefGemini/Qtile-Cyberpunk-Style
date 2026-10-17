@@ -25,3 +25,5 @@ config.py.save.*
 
 # Qtile runtime artifacts
 *.log
+monitor_layout.txt
+monitor_layout.txt.tmp

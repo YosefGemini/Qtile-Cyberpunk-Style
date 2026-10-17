@@ -5,14 +5,16 @@ handling that works on **both X11 and Wayland**, plus an installer that works
 around a broken Arch package so it keeps starting on Arch Linux.
 
 ```
-config.py          # thin entry point
-modules/           # settings, theme, functions, keys, groups,
-                   # layouts, widgets, screens, hooks
-scripts/           # autostart.sh, picom-toggle.sh, dmenu.sh
-icons/             # bar icons
-install.sh         # installer (Arch Linux)
-LICENSE            # MIT License
-.gitignore         # keeps caches, venvs and backups out of the repo
+config.py           # thin entry point
+modules/            # settings, theme, functions, keys, groups,
+                    # layouts, widgets, screens, hooks,
+                    # monitor_layout, monitor_widget
+scripts/            # autostart.sh, picom-toggle.sh, dmenu.sh
+icons/              # bar icons
+monitor_layout.txt  # generated: saved monitor order/modes/primary
+install.sh          # installer (Arch Linux)
+LICENSE             # MIT License
+.gitignore          # keeps caches, venvs and backups out of the repo
 ```
 
 The visual appearance (colours, fonts, bar layout, decorations) is unchanged
@@ -132,23 +134,26 @@ hook, which is called every time the monitor set changes. It builds exactly
 - only the main screen gets the system tray (avoids
   `ConfigError: Only one Systray can be used.`).
 
-On **X11** the outputs are also arranged automatically at startup by
-`arrange_monitors()`, which reads `xrandr --query` and applies:
+On **X11** the outputs are arranged at startup by
+`modules/monitor_layout.py` (falling back to the automatic layout when no
+saved configuration exists), which reads `xrandr --query` and applies
+`--mode ... --pos XxY` per output plus `--primary`:
 
 ```bash
-xrandr --output eDP-1   --auto --primary \
-       --output DP-1    --auto --left-of  eDP-1 \
-       --output HDMI-A-1 --auto --right-of eDP-1
+xrandr --output DP-1     --mode 1440x900  --pos -1440x0 \
+       --output eDP-1    --mode 1920x1080 --pos 0x0     --primary \
+       --output HDMI-A-1 --mode 1280x1024 --pos 1920x0
 ```
 
-Every output is set to its **preferred (best) mode** with `--auto`. The exact
-ports are detected at runtime, so it also works on other machines: the laptop
-panel is primary, `DP-*` panels go on the left and the rest on the right.
+Every output uses its preferred mode by default, and the exact ports are
+detected at runtime, so it also works on other machines: the laptop panel is
+primary, `DP-*` panels go on the left and the rest on the right.
 
 On **Wayland** qtile (wlroots) owns the output layout; the bar mapping is
-correct regardless, which is what caused the blank screen before. Output
-*positioning* on Wayland is done by the compositor - install `wlr-randr` and
-run it in `scripts/autostart.sh` if you need to move outputs around.
+correct regardless, which is what caused the blank screen before. Position and
+resolution changes use `wlr-randr` (Qtile implements
+`wlr-output-management`); without it, only the primary/persistence logic is
+available.
 
 Screen objects are cached per output so a reconfigure reuses them instead of
 creating duplicate trays.
@@ -234,23 +239,189 @@ workspace (which produced "Key spec duplicated" warnings).
 
 ---
 
+## Monitor layout manager
+
+A custom bar widget (`MonitorLayout`, a `TextBox`) lets you manage monitors
+without editing files by hand.
+
+- The widget shows the current order and marks the primary output, e.g.
+  `🖥 eDP-1★ | DP-1 | HDMI-A-1`.
+- **Click the widget** or press **`Super+Ctrl+M`** to open the editor popup.
+- In the editor you can:
+  - set the **primary** output (`★`),
+  - **reorder** outputs (`◀` / `▶`),
+  - **cycle resolutions** by clicking the mode (only modes reported by the
+    backend are offered, preferred first),
+  - **nudge exact x/y positions** via the `Pos…` menu (`±10`/`±100`), or return
+    to automatic flow with `Auto flow`,
+  - **Apply** (saves and applies) or **Auto** (reset to automatic layout).
+
+The layout is saved to `~/.config/qtile/monitor_layout.txt`:
+
+```ini
+[layout]
+version=1
+primary=eDP-1
+order=DP-1,eDP-1,HDMI-A-1
+
+[DP-1]
+mode=1440x900
+x=-1440
+y=0
+
+[eDP-1]
+mode=1920x1080
+x=0
+y=0
+
+[HDMI-A-1]
+mode=1280x1024
+x=1920
+y=0
+```
+
+Behaviour:
+
+- With multiple screens, the saved configuration is used for the connected
+  outputs; monitors not in the file are appended and auto-placed.
+- Entries for **disconnected** outputs and the stored `primary` are kept.
+- If the stored primary is disconnected, the effective primary falls back to
+  the laptop panel, then to the first connected output.
+- A single connected monitor always becomes the main screen.
+- On X11, positions/modes are applied with `xrandr`; on Wayland with
+  `wlr-randr` (Qtile implements `wlr-output-management`). Without
+  `wlr-randr`, Wayland keeps the primary/persistence logic but cannot change
+  position or resolution.
+- The system tray stays on the built-in panel (or the first output when no
+  laptop panel is present).
+
+---
+
+## Keyboard shortcuts
+
+`Super` is the Windows/Command key (`mod4`), `Alt` is `mod1`, `Ctrl` is `mod2`.
+Bindings live in `modules/keys.py`.
+
+### Windows and focus
+
+| Shortcut | Action |
+|---|---|
+| `Super+Return` | Open `alacritty` |
+| `Super+Shift+Return` | Open `dolphin` |
+| `Super+t` | Open `xterm` |
+| `Super+q` / `Alt+F4` | Close focused window |
+| `Super+m` | Toggle fullscreen |
+| `Super+Shift+space` | Toggle floating |
+| `Super+Up/Down/Left/Right` | Move focus between windows |
+| `Super+Ctrl+Right` / `Super+Ctrl+Left` | Grow / shrink the main pane |
+| `Super+Ctrl+Up/Down` | Move window up / down in the stack |
+| `Super+Shift+Up/Down` | Shuffle window up / down |
+| `Super+Shift+Left/Right` | Swap window left / right |
+| `Super+Shift+f` | Flip the master pane side |
+
+### Workspaces and layouts
+
+| Shortcut | Action |
+|---|---|
+| `Super+1…0` | Switch to workspace 1–10 |
+| `Super+Shift+1…0` | Move window to workspace and follow |
+| `Super+Ctrl+1…0` | Move window to workspace (stay here) |
+| `Super+Tab` / `Super+Shift+Tab` | Next / previous workspace |
+| `Ctrl+Alt+Right` / `Ctrl+Alt+Left` | Next / previous workspace |
+| `Super+space` | Cycle layout |
+
+### Monitors
+
+| Shortcut | Action |
+|---|---|
+| `Super+Ctrl+M` | Open the monitor layout editor |
+| Click the `MonitorLayout` widget | Open the monitor layout editor |
+
+### Launch and system
+
+| Shortcut | Action |
+|---|---|
+| `Super+Shift+d` | `dmenu_run` |
+| `Alt+F1` | `nwggrid` application grid |
+| `Alt+F2` | `gmrun` run dialog |
+| `Alt+p` | `pamac-manager` |
+| `Alt+f` | `firedragon` |
+| `Alt+m` | `pcmanfm` |
+| `Alt+w` | `garuda-welcome` |
+| `Alt+space` | Next keyboard layout |
+| `Super+v` | `pavucontrol` |
+| `Ctrl+Alt+t` | `xterm` |
+| `Ctrl+Alt+o` | Toggle `picom` (X11 only) |
+| `Ctrl+Shift+Escape` | `lxtask` |
+| `Super+Escape` | `xkill` |
+| `Super+Shift+r` | Restart qtile |
+| `Super+Ctrl+q` | Shutdown qtile |
+
+### Screenshots and media
+
+| Shortcut | Action |
+|---|---|
+| `Print` / `Ctrl+Print` | Full screenshot to `~/Pictures` (`flameshot`) |
+| `Super+Shift+s` | Region screenshot (`flameshot gui`) |
+| `XF86MonBrightnessUp/Down` | Brightness ±5% |
+| `XF86AudioRaiseVolume/LowerVolume/Mute` | Volume control |
+| `XF86AudioPlay/Next/Prev/Stop` | Media control (`playerctl`) |
+
+### Mouse
+
+| Shortcut | Action |
+|---|---|
+| `Super+Button1` drag | Move a floating window |
+| `Super+Button3` drag | Resize a floating window |
+| `Super+Button2` | Bring window to front |
+
+> The launcher/tool bindings require the optional packages listed under
+> [Dependencies](#dependencies).
+
+---
+
 ## Customising
 
 - **Colours / fonts / layout theme** → `modules/theme.py`
 - **Key bindings** → `modules/keys.py`
 - **Bar widgets** → `modules/widgets.py`
 - **Monitors / bars** → `modules/screens.py`
+- **Monitor order / resolution / primary** → `monitor_layout.txt` or the
+  `MonitorLayout` widget (`modules/monitor_layout.py`)
 - **Startup apps** → `scripts/autostart.sh`
 - **Workspaces** → `modules/groups.py`
 
-## Requirements
+## Dependencies
 
-- Arch Linux (installer), qtile 0.37.x and `qtile-extras` (AUR
-  `qtile-extras-git`).
-- The installer also pulls: `python`, `python-pip`, `python-cffi`,
-  `python-cairocffi`, `python-pywayland`, `python-pywlroots`, `python-pyxdg`,
-  `ttf-nerd-fonts-symbols`.
-- Optional wallpapers: `/usr/share/wallpapers/garuda-wallpapers/`.
+### Required
+
+| Purpose | Package |
+|---|---|
+| Window manager | `qtile` |
+| Qtile widgets, popups, tray | `qtile-extras-git` (AUR) |
+| Python bindings | `python`, `python-pip`, `python-cffi`, `python-cairocffi`, `python-pywayland`, `python-pywlroots`, `python-pyxdg` |
+| Fixed xcffib (per-user pip) | `xcffib==1.6.2` |
+| Wayland tray / DBus | `dbus-fast` (per-user pip) |
+| Monitor layout (X11) | `xorg-xrandr` |
+| Monitor layout (Wayland) | `wlr-randr` |
+| **Wayland wallpaper** | **`swaybg`** |
+| X11 compositor / wallpaper / helpers | `picom`, `feh`, `numlockx`, `lxsession` |
+| Notifications / tray applets | `dunst`, `network-manager-applet`, `blueman`, `volumeicon` |
+| Bar icons/fonts | `ttf-nerd-fonts-symbols` |
+
+`scripts/autostart.sh` uses **`swaybg`** on Wayland (and `feh`/`picom` on X11)
+to set the wallpaper. Wallpapers under
+`/usr/share/wallpapers/garuda-wallpapers/` are Garuda-specific and optional.
+
+### Optional (apps used by the default key bindings)
+
+`alacritty`, `xterm`, `dmenu`, `jgmenu`, `flameshot`, `brightnessctl`,
+`playerctl`, `pavucontrol`, `lxtask`, `pcmanfm`, `xorg-xkill`.
+Install them with `./install.sh --with-optional`.
+
+Also referenced by some bindings (AUR/Garuda-specific, install manually if you
+use them): `gmrun`, `nwg-grid`, `pamac-manager`/`pamac-tray`, `firedragon`,
+`garuda-welcome`, `dolphin`.
 
 ## Manual install (non-Arch)
 
@@ -259,8 +430,10 @@ workspace (which produced "Key spec duplicated" warnings).
 2. Add a working **`xcffib == 1.6.2`** and `dbus-fast` to your Python user
    site-packages (`pip install --user xcffib==1.6.2 dbus-fast`) if your
    distribution ships a broken xcffib.
-3. Copy this directory to `~/.config/qtile`.
-4. Log in with the standard **Qtile** / **Qtile (Wayland)** session.
+3. Install `xrandr` (X11), `wlr-randr` (Wayland layout) and `swaybg`
+   (Wayland wallpaper).
+4. Copy this directory to `~/.config/qtile`.
+5. Log in with the standard **Qtile** / **Qtile (Wayland)** session.
 
 ## License
 

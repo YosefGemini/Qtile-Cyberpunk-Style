@@ -3,13 +3,17 @@
 # Installer for the modular qtile configuration.
 #
 # Arch Linux focused. It:
-#   1. installs the required system packages
+#   1. installs the required system packages (including wlr-randr for the
+#      Wayland monitor layout and swaybg for the Wayland wallpaper)
 #   2. backs up any existing ~/.config/qtile and installs this configuration
 #   3. fixes the broken Arch python-xcffib 1.7.0 by placing a working
 #      xcffib==1.6.2 (plus dbus-fast) in the per-user site-packages.
 #      This needs no sudo and leaves the system packages untouched. See
 #      README.md - "Problem 1".
 #   4. validates the configuration with `qtile check`
+#
+# Usage: ./install.sh [--with-optional]
+#   --with-optional  also install the apps used by the default key bindings
 #
 set -euo pipefail
 
@@ -20,7 +24,9 @@ CONFIG_DIR="$CONFIG_HOME/qtile"
 # Last known-good xcffib before Arch's broken 1.7.0 (see README).
 XCFFIB_VERSION="1.6.2"
 
+# Required by the configuration and the default session.
 SYSTEM_PKGS=(
+  qtile
   python
   python-pip
   python-cffi
@@ -28,14 +34,54 @@ SYSTEM_PKGS=(
   python-pywayland
   python-pywlroots
   python-pyxdg
-  qtile
   ttf-nerd-fonts-symbols
+  # monitor layout manager
+  xorg-xrandr
+  wlr-randr
+  # wayland wallpaper
+  swaybg
+  # X11 compositor / wallpaper / helpers and tray applets used by autostart.sh
+  picom
+  dunst
+  feh
+  numlockx
+  lxsession
+  network-manager-applet
+  blueman
+  volumeicon
+)
+
+# Applications referenced by the default key bindings. Installed only with
+# --with-optional.
+OPTIONAL_PKGS=(
+  alacritty
+  xterm
+  dmenu
+  jgmenu
+  flameshot
+  brightnessctl
+  playerctl
+  pavucontrol
+  lxtask
+  pcmanfm
+  xorg-xkill
 )
 
 # qtile_extras is not in the official repositories.
 AUR_PKGS=(
   qtile-extras-git
 )
+
+WITH_OPTIONAL=false
+for arg in "$@"; do
+  case "$arg" in
+    --with-optional) WITH_OPTIONAL=true ;;
+    -h|--help)
+      echo "Usage: $0 [--with-optional]"
+      exit 0
+      ;;
+  esac
+done
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*"; }
@@ -59,6 +105,17 @@ install_system_pkgs() {
   done
   [ ${#missing[@]} -eq 0 ] && return 0
   info "Installing system packages: ${missing[*]}"
+  sudo pacman -S --needed --noconfirm "${missing[@]}"
+}
+
+install_optional_pkgs() {
+  [ "$WITH_OPTIONAL" = true ] || return 0
+  local missing=()
+  for pkg in "${OPTIONAL_PKGS[@]}"; do
+    pacman -Qq "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+  done
+  [ ${#missing[@]} -eq 0 ] && return 0
+  info "Installing optional packages: ${missing[*]}"
   sudo pacman -S --needed --noconfirm "${missing[@]}"
 }
 
@@ -125,12 +182,16 @@ validate() {
 main() {
   require_arch
   install_system_pkgs
+  install_optional_pkgs
   install_aur_pkgs
   backup_config
   install_config
   fix_xcffib
   validate
   info "Done. Log out and pick 'Qtile' (X11) or 'Qtile (Wayland)' in your display manager."
+  info "Wayland monitor layout uses wlr-randr; the wallpaper uses swaybg."
+  [ "$WITH_OPTIONAL" = true ] || \
+    info "Run './install.sh --with-optional' to install the key-binding apps."
 }
 
 main "$@"

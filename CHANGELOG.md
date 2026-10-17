@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
+### Added
+
+- **Monitor layout manager**: `modules/monitor_layout.py` (persistence +
+  `xrandr`/`wlr-randr` backends + ordering/primary fallback rules) and
+  `modules/monitor_widget.py` (`MonitorLayout` TextBox widget with a native
+  qtile popup editor). Layout is saved to `monitor_layout.txt`; supports
+  reordering, resolution selection, primary selection and exact x/y nudging.
+  Open with a click on the widget or `Super+Ctrl+M`.
+- `Super+Ctrl+M` key binding.
+- `install.sh --with-optional` to install the key-binding applications.
+- README "Dependencies" section (required + optional), monitor layout
+  documentation and a "Keyboard shortcuts" reference.
+
+### Changed
+
+- `screens.py` resolves real X11 output names (Qtile reports `port=None`) so
+  the main-screen detection works on X11, not only Wayland.
+- `hooks.py` applies the saved monitor layout at startup and when the set of
+  connected outputs changes; focus follows the effective primary.
+- `install.sh` now installs `xorg-xrandr`, `wlr-randr`, `swaybg`, and the
+  session tools used by `autostart.sh` (`picom`, `dunst`, `feh`, `numlockx`,
+  `lxsession`, `network-manager-applet`, `blueman`, `volumeicon`).
+- README documents that `swaybg` provides the Wayland wallpaper.
+
 ## [0.1.0] - 2026-10-16
 
 First modular, cross-backend release. Fixes the issues that prevented the
@@ -61,5 +87,6 @@ handling and an installer.
 - Duplicate `mouse` definition (lost `Button2` bring-to-front) and duplicated
   `Tab` key bindings.
 
-[Unreleased]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YosefGemini/Qtile-Cyberpunk-Style/releases/tag/v0.1.0

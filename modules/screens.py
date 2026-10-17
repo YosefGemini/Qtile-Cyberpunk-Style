@@ -1,29 +1,24 @@
-"""Screen generation and monitor auto-arrangement.
+"""Screen generation.
 
 Instead of hardcoding three ``Screen`` objects (which caused the bar to land
 on the wrong monitor when the output order changed), we use qtile's
 ``generate_screens`` hook. It is called every time the set of monitors
 changes, so one bar is always created for each *real* output.
 
-- The laptop panel (``eDP-*``/``LVDS-*``/...) is treated as the main screen
-  and is the only one that gets the system tray.
-- If only one monitor is connected, it automatically becomes the main screen.
-- On X11 the monitors are laid out with ``xrandr`` at startup (best mode per
-  output, laptop as primary, DisplayPort panels to the left and HDMI panels
-  to the right).
+The system tray is kept on the built-in laptop panel (or the first output when
+no laptop panel is connected). The *logical* primary screen used for focus and
+ordering is managed by :mod:`modules.monitor_layout`.
 
 Screen objects are cached per output so that a screen reconfigure reuses the
-same objects instead of building duplicates. Without the cache qtile leaks
-the previous system tray widget and raises
+same objects instead of building duplicates. Without the cache qtile leaks the
+previous system tray widget and raises
 ``ConfigError: Only one Systray can be used.``
 """
-
-import re
-import subprocess
 
 from libqtile import bar
 from libqtile.config import Screen
 
+from modules import monitor_layout as ml
 from modules.settings import is_main_output
 from modules.widgets import build_widgets
 
@@ -44,6 +39,26 @@ def _make_screen(show_tray):
     )
 
 
+def _resolved_names(outputs):
+    """Map qtile Outputs to real port names (X11 reports port=None)."""
+    infos = ml.list_outputs()
+    by_rect = {
+        (info.x, info.y, info.width, info.height): info.name for info in infos
+    }
+
+    names = []
+    for output in outputs:
+        name = output.port
+        if not name:
+            rect = getattr(output, "rect", None)
+            if rect is not None:
+                name = by_rect.get(
+                    (rect.x, rect.y, rect.width, rect.height)
+                )
+        names.append(name)
+    return names
+
+
 def generate_screens(outputs):
     """Build one Screen per connected output (called by qtile)."""
     if not outputs:
@@ -53,57 +68,20 @@ def generate_screens(outputs):
             _screen_cache["__default__"] = screen
         return [screen]
 
-    has_main = any(is_main_output(o.port) for o in outputs)
+    names = _resolved_names(outputs)
+    has_laptop = any(is_main_output(name) for name in names if name)
 
     screens = []
-    for i, output in enumerate(outputs):
-        key = output.port or "__index_%d__" % i
+    for index, _output in enumerate(outputs):
+        name = names[index]
+        key = name or "__index_%d__" % index
         screen = _screen_cache.get(key)
         if screen is None:
-            main = is_main_output(output.port) if has_main else (i == 0)
-            screen = _make_screen(show_tray=main)
+            if has_laptop:
+                show_tray = is_main_output(name)
+            else:
+                show_tray = index == 0
+            screen = _make_screen(show_tray=show_tray)
             _screen_cache[key] = screen
         screens.append(screen)
     return screens
-
-
-def _connected_outputs():
-    try:
-        out = subprocess.check_output(["xrandr", "--query"], text=True, stderr=subprocess.DEVNULL)
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return []
-    return re.findall(r"^(\S+) connected", out, flags=re.MULTILINE)
-
-
-def arrange_monitors():
-    """Arrange connected X11 monitors with xrandr.
-
-    Laptop panel becomes primary, ``DP-*`` outputs go to the left and the
-    remaining external outputs to the right, each at its preferred mode.
-    No-op on Wayland or when fewer than two outputs are connected.
-    """
-    ports = _connected_outputs()
-    if len(ports) < 2:
-        return
-
-    mains = [p for p in ports if is_main_output(p)]
-    main = mains[0] if mains else ports[0]
-    others = [p for p in ports if p != main]
-
-    left = [p for p in others if p.startswith("DP")]
-    right = [p for p in others if p not in left]
-
-    args = ["xrandr", "--output", main, "--auto", "--primary"]
-    prev = main
-    for port in left:
-        args += ["--output", port, "--auto", "--left-of", prev]
-        prev = port
-    prev = main
-    for port in right:
-        args += ["--output", port, "--auto", "--right-of", prev]
-        prev = port
-
-    try:
-        subprocess.call(args)
-    except FileNotFoundError:
-        pass

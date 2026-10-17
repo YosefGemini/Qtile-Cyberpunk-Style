@@ -10,6 +10,7 @@ from qtile_extras import widget
 from qtile_extras.widget.decorations import PowerLineDecoration, RectDecoration
 
 from modules.functions import only_app_name
+from modules.monitor_widget import MonitorLayout
 from modules.settings import backend_is_wayland
 from modules.theme import colors
 
@@ -80,16 +81,16 @@ def build_widgets(show_tray=True):
             parse_text=only_app_name,
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
-        widget.Net(
-            foreground=colors[15],
-            background=colors[1],
-            font="DS-Digital Bold",
-            fontsize=15,
-            format="\uf1eb   {down} \u2193\u2191 {up}",
-            interface="wlo1",
-            padding_y=5,
-            decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
-        ),
+        # widget.Net(
+        #     foreground=colors[15],
+        #     background=colors[1],
+        #     font="DS-Digital Bold",
+        #     fontsize=15,
+        #     format="\uf1eb   {down} \u2193\u2191 {up}",
+        #     interface="wlo1",
+        #     padding_y=5,
+        #     decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
+        # ),
         widget.CPU(
             background=colors[7],
             foreground=colors[1],
@@ -111,6 +112,7 @@ def build_widgets(show_tray=True):
             foreground=colors[15],
             font="DS-Digital Bold",
             format="\U0001f5ad {temp} \u00b0C {perf}",
+            # format="󰢮  {temp} \u00b0C",
             fontsize=14,
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
@@ -124,7 +126,7 @@ def build_widgets(show_tray=True):
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
         widget.DF(
-            format="\u26c1 {uf}{m:.1f} {r:.0f}%",  # Limitamos los decimales de {m} a 1 (o usa :.0f si prefieres enteros)
+            format="\u26c1 {uf:.1f}{m} {r:.0f}%",
             visible_on_warn=False,
             foreground=colors[1],
             background=colors[4],
@@ -135,7 +137,7 @@ def build_widgets(show_tray=True):
         widget.CurrentLayoutIcon(
             foreground=colors[15],
             background=colors[1],
-            padding=4,
+            padding=2,
             scale=0.6,
             decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
         ),
@@ -205,6 +207,12 @@ def build_widgets(show_tray=True):
                 linewidth=2,
                 padding=5,
                 foreground=colors[15],
+            ),
+            MonitorLayout(
+                foreground=colors[15],
+                fontsize=13,
+                padding=5,
+                decorations=[PowerLineDecoration(path="forward_slash", padding_y=5)],
             ),
             widget.CurrentScreen(
                 font="DS-Digital Bold",

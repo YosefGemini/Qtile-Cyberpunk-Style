@@ -1,5 +1,6 @@
 """Helper functions used by widgets and keys."""
 
+import os
 from libqtile.lazy import lazy
 
 
@@ -52,3 +53,11 @@ def window_to_next_screen(qtile, switch_group=False, switch_screen=False):
         qtile.current_window.togroup(group, switch_group=switch_group)
         if switch_screen:
             qtile.cmd_to_screen(i + 1)
+
+
+def window_to_screen(qtile, screen_index, switch_group=False, switch_screen=False):
+    if 0 <= screen_index < len(qtile.screens):
+        group = qtile.screens[screen_index].group.name
+        qtile.current_window.togroup(group, switch_group=switch_group)
+        if switch_screen:
+            qtile.cmd_to_screen(screen_index)
